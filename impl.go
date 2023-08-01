@@ -21,7 +21,7 @@ func (wv *WinEv) subscribe(name, query string) {
 		return
 	}
 
-	audit.NewEvent("win-log").
+	audit.NewEvent("evt-log").
 		Subject("%s last bookmark", name).
 		From(wv.cfg.co.CodeVM()).
 		Msg("%s", bookmark).Log().Put()

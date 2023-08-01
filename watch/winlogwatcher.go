@@ -49,19 +49,19 @@ func New() (*WinLogWatcher, error) {
 // Subscribe to a Windows Event Log channel, starting with the first vela-event
 // in the log. `query` is an XPath expression for filtering events: to recieve
 // all events on the channel, use "*" as the query.
-func (self *WinLogWatcher) SubscribeFromBeginning(channel, query string) error {
-	return self.subscribeWithoutBookmark(channel, query, EvtSubscribeStartAtOldestRecord)
+func (wlwr *WinLogWatcher) SubscribeFromBeginning(channel, query string) error {
+	return wlwr.subscribeWithoutBookmark(channel, query, EvtSubscribeStartAtOldestRecord)
 }
 
 // Subscribe to a Windows Event Log channel, starting with the next vela-event
 // that arrives. `query` is an XPath expression for filtering events: to recieve
 // all events on the channel, use "*" as the query.
-func (self *WinLogWatcher) SubscribeFromNow(channel, query string) error {
-	return self.subscribeWithoutBookmark(channel, query, EvtSubscribeToFutureEvents)
+func (wlwr *WinLogWatcher) SubscribeFromNow(channel, query string) error {
+	return wlwr.subscribeWithoutBookmark(channel, query, EvtSubscribeToFutureEvents)
 }
 
-func (self *WinLogWatcher) subscribeWithoutBookmark(channel, query string, flags EVT_SUBSCRIBE_FLAGS) error {
-	if _, ok := self.load(channel); ok {
+func (wlwr *WinLogWatcher) subscribeWithoutBookmark(channel, query string, flags EVT_SUBSCRIBE_FLAGS) error {
+	if _, ok := wlwr.load(channel); ok {
 		return fmt.Errorf("A watcher for channel %q already exists", channel)
 	}
 
@@ -69,13 +69,13 @@ func (self *WinLogWatcher) subscribeWithoutBookmark(channel, query string, flags
 	if err != nil {
 		return fmt.Errorf("Failed to create new bookmark handle: %v", err)
 	}
-	callback := &LogEventCallbackWrapper{callback: self, subscribedChannel: channel}
+	callback := &LogEventCallbackWrapper{callback: wlwr, subscribedChannel: channel}
 	subscription, err := CreateListener(channel, query, flags, callback)
 	if err != nil {
 		CloseEventHandle(uint64(newBookmark))
 		return err
 	}
-	self.store(channel, &channelWatcher{
+	wlwr.store(channel, &channelWatcher{
 		bookmark:     newBookmark,
 		subscription: subscription,
 		callback:     callback,
@@ -87,11 +87,11 @@ func (self *WinLogWatcher) subscribeWithoutBookmark(channel, query string, flags
 // after the bookmarked vela-event. There may be a gap if events have been purged. `query`
 // is an XPath expression for filtering events: to recieve all events on the channel,
 // use "*" as the query
-func (self *WinLogWatcher) SubscribeFromBookmark(channel, query string, xmlString string) error {
-	if _, ok := self.load(channel); ok {
+func (wlwr *WinLogWatcher) SubscribeFromBookmark(channel, query string, xmlString string) error {
+	if _, ok := wlwr.load(channel); ok {
 		return fmt.Errorf("A watcher for channel %q already exists", channel)
 	}
-	callback := &LogEventCallbackWrapper{callback: self, subscribedChannel: channel}
+	callback := &LogEventCallbackWrapper{callback: wlwr, subscribedChannel: channel}
 	bookmark, err := CreateBookmarkFromXml(xmlString)
 	if err != nil {
 		return fmt.Errorf("Failed to create new bookmark handle: %v", err)
@@ -102,7 +102,7 @@ func (self *WinLogWatcher) SubscribeFromBookmark(channel, query string, xmlStrin
 		return fmt.Errorf("Failed to add listener: %v", err)
 	}
 
-	self.store(channel, &channelWatcher{
+	wlwr.store(channel, &channelWatcher{
 		bookmark:     bookmark,
 		subscription: subscription,
 		callback:     callback,
@@ -110,12 +110,12 @@ func (self *WinLogWatcher) SubscribeFromBookmark(channel, query string, xmlStrin
 	return nil
 }
 
-func (self *WinLogWatcher) remove(channel string) error {
-	watch, ok := self.load(channel)
+func (wlwr *WinLogWatcher) remove(channel string) error {
+	watch, ok := wlwr.load(channel)
 	if !ok {
 		return nil
 	}
-	defer self.watches.Delete(channel)
+	defer wlwr.watches.Delete(channel)
 
 	var cancelErr, closeErr error
 	cancelErr = CancelEventHandle(uint64(watch.subscription))
@@ -128,10 +128,10 @@ func (self *WinLogWatcher) remove(channel string) error {
 	return closeErr
 }
 
-func (self *WinLogWatcher) Watches() []string {
+func (wlwr *WinLogWatcher) Watches() []string {
 	var channel []string
 
-	self.watches.Range(func(key, value interface{}) bool {
+	wlwr.watches.Range(func(key, value interface{}) bool {
 		name := key.(string)
 		channel = append(channel, name)
 		return true
@@ -140,34 +140,34 @@ func (self *WinLogWatcher) Watches() []string {
 }
 
 /* Remove subscription from channel */
-func (self *WinLogWatcher) RemoveSubscription(channel string) error {
-	return self.remove(channel)
+func (wlwr *WinLogWatcher) RemoveSubscription(channel string) error {
+	return wlwr.remove(channel)
 }
 
 // Remove all subscriptions from this watcher and shut down.
-func (self *WinLogWatcher) Shutdown() {
+func (wlwr *WinLogWatcher) Shutdown() {
 	defer func() {
-		close(self.shutdown)
-		close(self.errChan)
-		close(self.eventChan)
+		close(wlwr.shutdown)
+		close(wlwr.errChan)
+		close(wlwr.eventChan)
 	}()
 
-	for _, channel := range self.Watches() {
-		self.RemoveSubscription(channel)
+	for _, channel := range wlwr.Watches() {
+		wlwr.RemoveSubscription(channel)
 	}
 
-	CloseEventHandle(uint64(self.renderContext))
+	CloseEventHandle(uint64(wlwr.renderContext))
 }
 
 /* Publish the received error to the errChan, but discard if shutdown is in progress */
-func (self *WinLogWatcher) PublishError(err error) {
+func (wlwr *WinLogWatcher) PublishError(err error) {
 	select {
-	case self.errChan <- err:
-	case <-self.shutdown:
+	case wlwr.errChan <- err:
+	case <-wlwr.shutdown:
 	}
 }
 
-func (self *WinLogWatcher) convertEvent(handle EventHandle, subscribedChannel string) (*WinLogEvent, error) {
+func (wlwr *WinLogWatcher) convertEvent(handle EventHandle, subscribedChannel string) (*WinLogEvent, error) {
 	// Rendered values
 	var computerName, providerName, channel string
 	var level, task, opcode, recordId, qualifiers, eventId, processId, threadId, version uint64
@@ -181,7 +181,7 @@ func (self *WinLogWatcher) convertEvent(handle EventHandle, subscribedChannel st
 	var publisherHandleErr error
 
 	// Render the values
-	renderedFields, renderedFieldsErr := RenderEventValues(self.renderContext, handle)
+	renderedFields, renderedFieldsErr := RenderEventValues(wlwr.renderContext, handle)
 	xml, xmlErr := RenderEventXML(handle)
 
 	if renderedFieldsErr == nil {
@@ -204,35 +204,35 @@ func (self *WinLogWatcher) convertEvent(handle EventHandle, subscribedChannel st
 		publisherHandle, publisherHandleErr = GetEventPublisherHandle(renderedFields)
 		if publisherHandleErr == nil {
 
-			if self.RenderKeywords {
+			if wlwr.RenderKeywords {
 				keywordsText, _ = FormatMessage(publisherHandle, handle, EvtFormatMessageKeyword)
 			}
 
-			if self.RenderMessage {
+			if wlwr.RenderMessage {
 				msgText, _ = FormatMessage(publisherHandle, handle, EvtFormatMessageEvent)
 			}
 
-			if self.RenderLevel {
+			if wlwr.RenderLevel {
 				lvlText, _ = FormatMessage(publisherHandle, handle, EvtFormatMessageLevel)
 			}
 
-			if self.RenderTask {
+			if wlwr.RenderTask {
 				taskText, _ = FormatMessage(publisherHandle, handle, EvtFormatMessageTask)
 			}
 
-			if self.RenderProvider {
+			if wlwr.RenderProvider {
 				providerText, _ = FormatMessage(publisherHandle, handle, EvtFormatMessageProvider)
 			}
 
-			if self.RenderOpcode {
+			if wlwr.RenderOpcode {
 				opcodeText, _ = FormatMessage(publisherHandle, handle, EvtFormatMessageOpcode)
 			}
 
-			if self.RenderChannel {
+			if wlwr.RenderChannel {
 				channelText, _ = FormatMessage(publisherHandle, handle, EvtFormatMessageChannel)
 			}
 
-			if self.RenderId {
+			if wlwr.RenderId {
 				idText, _ = FormatMessage(publisherHandle, handle, EvtFormatMessageId)
 			}
 		}
@@ -273,13 +273,13 @@ func (self *WinLogWatcher) convertEvent(handle EventHandle, subscribedChannel st
 	return &event, nil
 }
 
-func (self *WinLogWatcher) store(channel string, watch *channelWatcher) {
-	self.watches.Store(channel, watch)
+func (wlwr *WinLogWatcher) store(channel string, watch *channelWatcher) {
+	wlwr.watches.Store(channel, watch)
 }
 
-func (self *WinLogWatcher) load(channel string) (*channelWatcher, bool) {
+func (wlwr *WinLogWatcher) load(channel string) (*channelWatcher, bool) {
 
-	watch, ok := self.watches.Load(channel)
+	watch, ok := wlwr.watches.Load(channel)
 	if ok {
 		return watch.(*channelWatcher), true
 	}
@@ -287,23 +287,23 @@ func (self *WinLogWatcher) load(channel string) (*channelWatcher, bool) {
 }
 
 /* Publish a new vela-event */
-func (self *WinLogWatcher) PublishEvent(handle EventHandle, subscribedChannel string) {
+func (wlwr *WinLogWatcher) PublishEvent(handle EventHandle, subscribedChannel string) {
 
 	defer func() {
 		audit.Recover(audit.NewEvent("win vela-event fail").Msg("windows beat watcher fail"))
 	}()
 
 	// Convert the vela-event from the vela-event log schema
-	event, err := self.convertEvent(handle, subscribedChannel)
+	event, err := wlwr.convertEvent(handle, subscribedChannel)
 	if err != nil {
-		self.PublishError(err)
+		wlwr.PublishError(err)
 		return
 	}
 
-	watch, ok := self.load(subscribedChannel)
+	watch, ok := wlwr.load(subscribedChannel)
 	// Get the bookmark for the channel
 	if !ok {
-		self.errChan <- fmt.Errorf("No handle for channel bookmark %q", subscribedChannel)
+		wlwr.errChan <- fmt.Errorf("No handle for channel bookmark %q", subscribedChannel)
 		return
 	}
 
@@ -313,16 +313,16 @@ func (self *WinLogWatcher) PublishEvent(handle EventHandle, subscribedChannel st
 	// Serialize the boomark as XML and include it in the vela-event
 	bookmarkXml, err := RenderBookmark(watch.bookmark)
 	if err != nil {
-		self.PublishError(fmt.Errorf("Error rendering bookmark for vela-event - %v", err))
+		wlwr.PublishError(fmt.Errorf("Error rendering bookmark for vela-event - %v", err))
 		return
 	}
 	event.Bookmark = bookmarkXml
 
 	// Don't block when shutting down if the consumer has gone away
 	select {
-	case <-self.shutdown:
+	case <-wlwr.shutdown:
 		return
-	case self.eventChan <- event:
+	case wlwr.eventChan <- event:
 	}
 
 }

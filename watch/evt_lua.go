@@ -66,7 +66,7 @@ func (evt *WinLogEvent) Bytes() []byte {
 	buff := kind.NewJsonEncoder()
 	buff.Tab("")
 	buff.KV("addr", vela.GxEnv().Inet())
-	buff.KV("node_id", vela.GxEnv().ID())
+	buff.KV("minion_id", vela.GxEnv().ID())
 	buff.KV("provider_name", evt.ProviderName)
 	buff.KV("event_id", evt.EventId)
 	buff.KV("qualifiers", evt.Qualifiers)

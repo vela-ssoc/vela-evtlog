@@ -21,7 +21,7 @@ type config struct {
 	filter  *cond.Combine
 	chains  lua.UserKV
 	sdk     lua.Writer
-	pipe    *pipe.Px
+	pipe    *pipe.Chains
 	limit   ratelimit.Limiter
 	co      *lua.LState
 }
@@ -71,20 +71,6 @@ func (cfg *config) NewIndex(L *lua.LState, key string, val lua.LValue) {
 
 	case "to":
 		cfg.sdk = auxlib2.CheckWriter(val, L)
-
-	case "bucket":
-		switch val.Type() {
-
-		case lua.LTString:
-			cfg.bkt = []string{val.String()}
-
-		case lua.LTTable:
-			cfg.bkt = auxlib2.LTab2SS(val.(*lua.LTable))
-
-		default:
-			L.RaiseError("invalid bucket type , must be string or table ,got %s", val.Type().String())
-
-		}
 
 	case "pass":
 		switch val.Type() {

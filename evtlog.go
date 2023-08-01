@@ -5,12 +5,14 @@ package evtlog
 
 import (
 	"context"
-	"github.com/vela-ssoc/vela-kit/audit"
 	"github.com/vela-ssoc/vela-evtlog/watch"
+	"github.com/vela-ssoc/vela-kit/audit"
 	auxlib2 "github.com/vela-ssoc/vela-kit/auxlib"
-	"github.com/vela-ssoc/vela-kit/execpt"
+	"github.com/vela-ssoc/vela-kit/exception"
 	"github.com/vela-ssoc/vela-kit/lua"
 	"github.com/vela-ssoc/vela-kit/pipe"
+	"github.com/vela-ssoc/vela-kit/safecall"
+	"time"
 )
 
 type WinEv struct {
@@ -110,7 +112,7 @@ func (wv *WinEv) accpet() {
 			wv.help(evt)
 
 		case err := <-wv.watcher.Error():
-			audit.NewEvent("beat-windows-log").
+			audit.NewEvent("evtlog").
 				Subject("windows vela-event log fail").
 				From(wv.cfg.co.CodeVM()).
 				Msg("windows 系统日志获取失败").
@@ -140,18 +142,27 @@ func (wv *WinEv) Start() error {
 }
 
 func (wv *WinEv) Reload() error {
-	errs := execpt.New()
+	errs := exception.New()
 	for _, name := range wv.watcher.Watches() {
-		if !wv.inChannel(name) {
-			errs.Try(name, wv.watcher.RemoveSubscription(name))
-		}
+		errs.Try(name, wv.watcher.RemoveSubscription(name))
 	}
+	if errs.Len() > 0 {
+		return errs.Wrap()
+	}
+
+	for _, item := range wv.cfg.channel {
+		wv.subscribe(item.name, item.query)
+	}
+
 	return errs.Wrap()
 }
 
 func (wv *WinEv) Close() error {
-	wv.stop()
-	wv.watcher.Shutdown()
+	safecall.New(true).Timeout(5 * time.Second).Exec(func() error {
+		wv.stop()
+		wv.watcher.Shutdown()
+		return nil
+	})
 	return nil
 }
 

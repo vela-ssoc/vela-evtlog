@@ -5,7 +5,7 @@ package watch
 
 import (
 	"encoding/xml"
-	auxlib2 "github.com/vela-ssoc/vela-kit/auxlib"
+	"github.com/vela-ssoc/vela-kit/auxlib"
 	"github.com/vela-ssoc/vela-kit/kind"
 	"github.com/vela-ssoc/vela-kit/lua"
 	"sync"
@@ -154,19 +154,32 @@ func (xd *XmlEvent) Bytes() []byte {
 }
 
 func (xd *XmlEvent) String() string {
-	return auxlib2.B2S(xd.Bytes())
+	return auxlib.B2S(xd.Bytes())
+}
+
+func (evt *WinLogEvent) String() string {
+	/*
+		chunk, err := json.Marshal(evt)
+		if err != nil {
+			xEnv.Errorf("%s win log event to string fail %v", err)
+			return ""
+		}
+		return lua.B2S(chunk)
+	*/
+
+	return lua.B2S(evt.Bytes())
 }
 
 func (evt *WinLogEvent) Field(key string) string {
 	switch key {
 	case "event_id":
-		return auxlib2.ToString(evt.EventId)
+		return auxlib.ToString(evt.EventId)
 	case "op_code":
-		return auxlib2.ToString(evt.OpcodeText)
+		return auxlib.ToString(evt.OpcodeText)
 	case "ctime":
-		return auxlib2.ToString(evt.Created)
+		return auxlib.ToString(evt.Created)
 	case "record_id":
-		return auxlib2.ToString(evt.RecordId)
+		return auxlib.ToString(evt.RecordId)
 	case "xml":
 		return evt.XmlText
 	case "channel":

@@ -74,23 +74,18 @@ func (wv *WinEv) Index(L *lua.LState, key string) lua.LValue {
 	switch key {
 	case "subscribe":
 		return L.NewFunction(wv.subscribeL)
-
 	case "pipe":
 		return L.NewFunction(wv.pipeL)
 	case "ignore":
 		return lua.NewFunction(wv.ignoreL)
 	case "filter":
 		return lua.NewFunction(wv.filterL)
-
 	case "to":
 		return L.NewFunction(wv.toL)
-
 	case "limit":
 		return L.NewFunction(wv.limitL)
-
 	case "start":
 		return L.NewFunction(wv.startL)
-
 	default:
 		//todo
 	}
